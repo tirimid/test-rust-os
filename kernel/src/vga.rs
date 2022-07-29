@@ -36,17 +36,20 @@ fn vga_attr(fg_col: VgaColor, bg_col: VgaColor) -> u8 {
     (bg_col as u8) << 4 | fg_col as u8
 }
 
+fn extend_attr(attr: u8) -> u64 {
+    let attr = attr as u64;
+    attr << 8 | attr << 24 | attr << 40 | attr << 56
+}
+
 const VGA_BUFFER: *mut Volatile<VgaChar> = 0xb8000 as *mut Volatile<VgaChar>;
 const VGA_BUFFER_SIZE: (isize, isize) = (80, 25);
-const VGA_TAB_SIZE: isize = 8; // in characters.
+const VGA_TAB_SIZE: isize = 8; // in vga characters.
 
 static mut CURSOR: isize = 0;
 
 // after scrolling, empty area will be filled with specified colors.
 // data is lost upon scroll.
 pub fn scroll_down(fg_col: VgaColor, bg_col: VgaColor) {
-    let attr = vga_attr(fg_col, bg_col) as u64;
-    let q = attr << 8 | attr << 24 | attr << 40 | attr << 56;
     unsafe {
         ptr::copy(
             VGA_BUFFER.offset(VGA_BUFFER_SIZE.0),
@@ -56,15 +59,13 @@ pub fn scroll_down(fg_col: VgaColor, bg_col: VgaColor) {
         memutil::fast_write_mem(
             VGA_BUFFER.offset(VGA_BUFFER_SIZE.0 * (VGA_BUFFER_SIZE.1 - 1)),
             20,
-            q,
+            extend_attr(vga_attr(fg_col, bg_col)),
         );
     }
 }
 
 // same things apply as `scroll_down()`.
 pub fn scroll_up(fg_col: VgaColor, bg_col: VgaColor) {
-    let attr = vga_attr(fg_col, bg_col) as u64;
-    let q = attr << 8 | attr << 24 | attr << 40 | attr << 56;
     unsafe {
         ptr::copy(
             VGA_BUFFER,
@@ -72,13 +73,16 @@ pub fn scroll_up(fg_col: VgaColor, bg_col: VgaColor) {
             (VGA_BUFFER_SIZE.0 * (VGA_BUFFER_SIZE.1 - 1)).try_into().unwrap(),
         );
     }
-    memutil::fast_write_mem(VGA_BUFFER, 20, q);
+    memutil::fast_write_mem(VGA_BUFFER, 20, extend_attr(vga_attr(fg_col, bg_col)));
 }
 
 pub fn print_char(ch: u8, fg_col: VgaColor, bg_col: VgaColor) {
     unsafe {
         match ch {
-            b'\t' => CURSOR += VGA_TAB_SIZE,
+            b'\t' => {
+                CURSOR -= CURSOR % VGA_TAB_SIZE;
+                CURSOR += VGA_TAB_SIZE;
+            }
             b'\n' => CURSOR += VGA_BUFFER_SIZE.0 - CURSOR % VGA_BUFFER_SIZE.0,
             ch => {
                 let vga_ch = Volatile::new(VgaChar { ch, attr: vga_attr(fg_col, bg_col) });
@@ -101,9 +105,7 @@ pub fn print_str(str_: &str, fg_col: VgaColor, bg_col: VgaColor) {
 }
 
 pub fn clear(fg_col: VgaColor, bg_col: VgaColor) {
-    let attr = vga_attr(fg_col, bg_col) as u64;
-    let q = attr << 8 | attr << 24 | attr << 40 | attr << 56;
-    memutil::fast_write_mem(VGA_BUFFER, 0x1f4, q);
+    memutil::fast_write_mem(VGA_BUFFER, 0x1f4, extend_attr(vga_attr(fg_col, bg_col)));
     unsafe {
         CURSOR = 0;
     }

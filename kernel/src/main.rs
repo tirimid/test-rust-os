@@ -23,6 +23,10 @@ pub extern "C" fn _start() -> ! {
         "neofetch",
         "rustc --version",
         "cargo test && cargo run",
+        "echo example\ttable\t\t123",
+        "echo a test\tvalue\t\t12874",
+        "# look, its\taligned\t\t89999",
+        "echo very very\tinteresting\t32",
     ];
     loop {
         for cmd in cmds {
