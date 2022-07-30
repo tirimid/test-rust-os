@@ -1,10 +1,8 @@
 use core::panic::PanicInfo;
 use core::arch::asm;
-
-#[panic_handler]
-pub fn panic(_info: &PanicInfo) -> ! {
-    loop {}
-}
+use crate::vga;
+use crate::conio;
+use vga::VgaColor;
 
 pub fn hang() -> ! {
     loop {
@@ -12,6 +10,17 @@ pub fn hang() -> ! {
             asm!("hlt");
         }
     }
+}
+
+#[panic_handler]
+pub fn panic(info: &PanicInfo) -> ! {
+    unsafe {
+        conio::CONOUT.flush_fg_col = VgaColor::White;
+        conio::CONOUT.flush_bg_col = VgaColor::Red;
+        vga::clear(conio::CONOUT.flush_fg_col, conio::CONOUT.flush_bg_col);
+    }
+    println!("{info}");
+    hang();
 }
 
 pub fn waste_cycles(cycle_cnt: usize) {
